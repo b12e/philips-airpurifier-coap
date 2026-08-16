@@ -3,6 +3,7 @@
   "config": {
     "abort": {
       "already_configured": "Apparaat is al geconfigureerd",
+      "cannot_connect": "Kan geen verbinding maken met het apparaat",
       "model_unsupported": "Model wordt niet ondersteund",
       "timeout": "Time-out, kan geen verbinding maken met het apparaat"
     },

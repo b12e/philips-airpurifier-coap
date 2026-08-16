@@ -1,5 +1,6 @@
 """The Philips AirPurifier component."""
 
+import contextlib
 import ipaddress
 import logging
 import re
@@ -59,16 +60,32 @@ class PhilipsAirPurifierConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         """Provide schema for user input."""
         return vol.Schema({vol.Required(CONF_HOST, default=user_input.get(CONF_HOST, "")): cv.string})
 
+    def _host_already_configured(self, host: str) -> bool:
+        """Return True if a config entry is already set up for this host."""
+        return any(
+            entry.options.get(CONF_HOST, entry.data.get(CONF_HOST)) == host
+            for entry in self._async_current_entries(include_ignore=False)
+        )
+
     async def async_step_dhcp(self, discovery_info: DhcpServiceInfo) -> ConfigFlowResult:
         """Handle initial step of auto discovery flow."""
         _LOGGER.debug("async_step_dhcp: called, found: %s", discovery_info)
 
         self._host = discovery_info.ip
+
+        # The manifest also triggers discovery for already registered devices, so we
+        # can end up here for a device that is up and running. These devices only
+        # accept a single CoAP session at a time, so probing one that the coordinator
+        # is already talking to would just fail. Bail out before touching the device.
+        if self._host_already_configured(self._host):
+            _LOGGER.debug("host %s is already configured, aborting discovery", self._host)
+            return self.async_abort(reason="already_configured")
+
         _LOGGER.debug("trying to configure host: %s", self._host)
 
         # let's try and connect to an AirPurifier
+        client = None
         try:
-            client = None
             timeout = TimeoutManager()
 
             # try for 30s to get a valid client
@@ -82,22 +99,28 @@ class PhilipsAirPurifierConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 status, _ = await client.get_status()
                 _LOGGER.debug("got status")
 
-            if client is not None:
-                await client.shutdown()
-
             # get the status out of the queue
             _LOGGER.debug("status for host %s is: %s", self._host, status)
 
         except TimeoutError:
-            _LOGGER.warning(
+            # discovery is automatic, so a device that doesn't answer is not
+            # worth bothering the user about in the log
+            _LOGGER.debug(
                 r"Timeout, host %s looks like a Philips AirPurifier but doesn't answer, aborting",
                 self._host,
             )
-            return self.async_abort(reason="model_unsupported")
+            return self.async_abort(reason="timeout")
 
         except Exception as ex:
-            _LOGGER.warning(r"Failed to connect: %s", ex)
-            raise exceptions.ConfigEntryNotReady from ex
+            _LOGGER.debug(r"Failed to connect to host %s: %s", self._host, ex)
+            return self.async_abort(reason="cannot_connect")
+
+        finally:
+            # always release the CoAP session, otherwise a failed discovery keeps
+            # occupying the single connection slot of the device
+            if client is not None:
+                with contextlib.suppress(Exception):
+                    await client.shutdown()
 
         # autodetect model
         self._model = extract_model(status)
@@ -206,8 +229,8 @@ class PhilipsAirPurifierConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 _LOGGER.debug("trying to configure host: %s", self._host)
 
                 # let's try and connect to an AirPurifier
+                client = None
                 try:
-                    client = None
                     timeout = TimeoutManager()
 
                     # try for 30s to get a valid client
@@ -221,9 +244,6 @@ class PhilipsAirPurifierConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         status, _ = await client.get_status()
                         _LOGGER.debug("got status")
 
-                    if client is not None:
-                        await client.shutdown()
-
                 except TimeoutError:
                     _LOGGER.warning(r"Timeout, host %s doesn't answer, aborting", self._host)
                     return self.async_abort(reason="timeout")
@@ -231,6 +251,12 @@ class PhilipsAirPurifierConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 except Exception as ex:
                     _LOGGER.warning(r"Failed to connect: %s", ex)
                     raise exceptions.ConfigEntryNotReady from ex
+
+                finally:
+                    # always release the CoAP session, the device only accepts one
+                    if client is not None:
+                        with contextlib.suppress(Exception):
+                            await client.shutdown()
 
                 # autodetect model
                 self._model = extract_model(status)
@@ -316,8 +342,8 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 errors[CONF_HOST] = "host"
             else:
                 _LOGGER.debug("options flow: trying to connect to new host %s", new_host)
+                client = None
                 try:
-                    client = None
                     timeout = TimeoutManager()
 
                     async with timeout.async_timeout(30):
@@ -327,9 +353,6 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     async with timeout.async_timeout(30):
                         status, _ = await client.get_status()
                         _LOGGER.debug("options flow: got status from host %s", new_host)
-
-                    if client is not None:
-                        await client.shutdown()
 
                     device_id = status[PhilipsApi.DEVICE_ID]
                     _LOGGER.debug(
@@ -356,6 +379,11 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 except Exception as ex:
                     _LOGGER.warning("options flow: failed to connect to host %s: %s", new_host, ex)
                     errors[CONF_HOST] = "connect"
+                finally:
+                    # always release the CoAP session, the device only accepts one
+                    if client is not None:
+                        with contextlib.suppress(Exception):
+                            await client.shutdown()
 
         return self.async_show_form(
             step_id="init",
