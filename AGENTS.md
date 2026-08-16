@@ -109,7 +109,7 @@ The `ICON` enum maps icon names to filenames.
 
 ### Prerequisites
 
-- Python 3.13+
+- Python 3.14+ (Home Assistant 2026.7+ requires 3.14.2)
 - Linux environment (Home Assistant core requires `fcntl`)
 - Use the devcontainer for development
 
@@ -143,7 +143,7 @@ Follow [Home Assistant code style](https://developers.home-assistant.io/docs/dev
 
 - Use `ruff` for linting and formatting (replaces black, flake8, isort)
 - Line length: 100
-- Target: Python 3.13
+- Target: Python 3.14
 - Type hints on all public functions
 - Use `async`/`await` consistently
 - Entity attributes use `_attr_*` pattern

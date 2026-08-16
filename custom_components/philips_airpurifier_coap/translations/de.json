@@ -3,6 +3,7 @@
   "config": {
     "abort": {
       "already_configured": "Gerät is bereits konfiguriert",
+      "cannot_connect": "Verbindung zum Gerät nicht möglich",
       "model_unsupported": "Modell nicht unterstützt",
       "timeout": "Timeout, Verbindung zum Gerät nicht möglich"
     },

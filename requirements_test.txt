@@ -1,5 +1,8 @@
 pytest-homeassistant-custom-component
 pytest-timeout
 ruff
+# the integration depends on the frontend component, which needs the real
+# package to be importable when a config flow is started in tests
+home-assistant-frontend
 aioairctrl==0.3.1
 getmac>=0.9.4

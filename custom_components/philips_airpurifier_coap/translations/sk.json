@@ -3,6 +3,7 @@
   "config": {
     "abort": {
       "already_configured": "Zariadenie je už konfigurované",
+      "cannot_connect": "Nemôže sa pripojiť k zariadeniu",
       "model_unsupported": "Nepodporovaný model",
       "timeout": "Časový limit, nemôže sa pripojiť k zariadeniu"
     },

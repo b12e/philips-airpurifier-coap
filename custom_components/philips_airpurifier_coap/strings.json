@@ -3,6 +3,7 @@
   "config": {
     "abort": {
       "already_configured": "Device already configured",
+      "cannot_connect": "Cannot connect to device",
       "model_unsupported": "Model unsupported",
       "timeout": "Timeout, cannot connect to device"
     },
